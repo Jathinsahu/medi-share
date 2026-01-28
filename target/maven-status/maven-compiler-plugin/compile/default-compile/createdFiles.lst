@@ -1,0 +1,5 @@
+com\medshare\config\JwtAuthenticationFilter.class
+com\medshare\dto\UserDto.class
+com\medshare\model\User.class
+com\medshare\service\JwtTokenService.class
+com\medshare\model\User$UserType.class

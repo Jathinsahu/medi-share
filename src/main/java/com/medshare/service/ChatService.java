@@ -13,9 +13,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
-import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
+import java.util.*;
 
 @Service
 public class ChatService {
@@ -66,6 +64,57 @@ public class ChatService {
         return new PageImpl<>(messageDtos, pageable, messages.getTotalElements());
     }
     
+    public List<Map<String, Object>> getUserConversations(UUID userId) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        // Get all donation requests where user is either requester or donor
+        List<DonationRequest> userRequestsAsRequester = donationRequestRepository.findByRequesterOrderByCreatedAtDesc(user);
+        List<DonationRequest> userRequestsAsDonor = donationRequestRepository.findByMedicine_DonorOrderByCreatedAtDesc(user);
+        
+        // Combine and deduplicate
+        Set<DonationRequest> allRequests = new HashSet<>();
+        allRequests.addAll(userRequestsAsRequester);
+        allRequests.addAll(userRequestsAsDonor);
+        
+        List<Map<String, Object>> conversations = new ArrayList<>();
+        
+        for (DonationRequest request : allRequests) {
+            Map<String, Object> convo = new HashMap<>();
+            convo.put("requestId", request.getRequestId());
+            
+            // Determine the other participant
+            User otherParticipant = request.getRequester().getUserId().equals(userId) 
+                ? request.getMedicine().getDonor() 
+                : request.getRequester();
+            
+            convo.put("participantId", otherParticipant.getUserId());
+            convo.put("participantName", otherParticipant.getFullName());
+            convo.put("medicineName", request.getMedicine().getMedicineName());
+            
+            // Get last message
+            List<ChatMessage> messages = chatMessageRepository.findByDonationRequestIdOrderByCreatedAtAsc(request.getRequestId());
+            if (!messages.isEmpty()) {
+                ChatMessage lastMessage = messages.get(messages.size() - 1);
+                Map<String, Object> lastMsg = new HashMap<>();
+                lastMsg.put("content", lastMessage.getContent());
+                lastMsg.put("createdAt", lastMessage.getCreatedAt());
+                lastMsg.put("senderId", lastMessage.getSender().getUserId());
+                convo.put("lastMessage", lastMsg);
+                
+                // Count unread messages (messages from other person that aren't from current user)
+                long unreadCount = messages.stream()
+                    .filter(msg -> !msg.getSender().getUserId().equals(userId) && msg.getRecipient().getUserId().equals(userId))
+                    .count();
+                convo.put("unreadCount", unreadCount);
+            }
+            
+            conversations.add(convo);
+        }
+        
+        return conversations;
+    }
+
     public ChatMessageDto convertToDto(ChatMessage message) {
         return new ChatMessageDto(
             message.getMessageId(),

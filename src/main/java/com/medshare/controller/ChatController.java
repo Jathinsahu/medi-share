@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -59,4 +60,14 @@ public class ChatController {
         var messages = chatService.getChatHistory(requestId);
         return ResponseEntity.ok(messages);
     }
+    
+    // Get user's conversations
+    @GetMapping("/conversations")
+    public ResponseEntity<List<Map<String, Object>>> getUserConversations(
+            @AuthenticationPrincipal UserDetailsImpl userDetails) {
+        
+        List<Map<String, Object>> conversations = chatService.getUserConversations(userDetails.getId());
+        return ResponseEntity.ok(conversations);
+    }
+
 }

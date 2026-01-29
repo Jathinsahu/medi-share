@@ -1,5 +1,6 @@
 package com.medshare.controller;
 
+import com.medshare.config.UserDetailsImpl;
 import com.medshare.dto.CreateMedicineRequest;
 import com.medshare.dto.ImpactMetrics;
 import com.medshare.dto.MedicineDto;
@@ -7,6 +8,7 @@ import com.medshare.dto.RequestMedicineRequest;
 import com.medshare.model.Medicine;
 import com.medshare.model.User;
 import com.medshare.service.MedicineService;
+import com.medshare.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
@@ -24,12 +26,16 @@ public class MedicineController {
     @Autowired
     private MedicineService medicineService;
 
+    @Autowired
+    private UserService userService;
+
     // CREATE - Donor lists medicine
     @PostMapping
     public ResponseEntity<MedicineDto> createMedicine(
             @Valid @RequestBody CreateMedicineRequest request,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
+        User user = userService.findByIdOrThrow(userDetails.getId());
         // Validate expiry date is future (handled in service)
         // Check if image uploaded (would be validated in request)
         MedicineDto medicine = medicineService.create(request, user);
@@ -77,8 +83,9 @@ public class MedicineController {
     public ResponseEntity<?> requestMedicine(
             @PathVariable UUID medicineId,
             @Valid @RequestBody RequestMedicineRequest request,
-            @AuthenticationPrincipal User user
+            @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
+        User user = userService.findByIdOrThrow(userDetails.getId());
         // Check if already reserved (handled in service)
         // Send notification to donor (would be implemented in service)
         // Create request record

@@ -1,5 +1,6 @@
 package com.medshare.controller;
 
+import com.medshare.config.UserDetailsImpl;
 import com.medshare.dto.UserDto;
 import com.medshare.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,8 +19,8 @@ public class UserController {
     private UserService userService;
 
     @GetMapping("/profile")
-    public ResponseEntity<UserDto> getCurrentUserProfile(@AuthenticationPrincipal UUID userId) {
-        Optional<UserDto> userDto = userService.findById(userId);
+    public ResponseEntity<UserDto> getCurrentUserProfile(@AuthenticationPrincipal UserDetailsImpl userDetails) {
+        Optional<UserDto> userDto = userService.findById(userDetails.getId());
         return userDto.map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }

@@ -2,12 +2,25 @@ import React, { useState, useEffect } from 'react';
 import './App.css';
 
 function App() {
-  const [medicines, setMedicines] = useState([]);
+  const [activeTab, setActiveTab] = useState('register');
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('browse'); // browse, donate, login, register
-  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
-  const [registerForm, setRegisterForm] = useState({
+  const [user, setUser] = useState(null);
+  const [medicines, setMedicines] = useState([]);
+  const [donateFormData, setDonateFormData] = useState({
+    medicineName: '',
+    category: '',
+    expiryDate: '',
+    quantity: 1,
+    unit: 'tablets',
+    manufacturer: '',
+    batchNumber: '',
+    genericName: '',
+    storageCondition: '',
+    prescriptionRequired: false
+  });
+
+  // Registration state
+  const [registerData, setRegisterData] = useState({
     email: '',
     password: '',
     fullName: '',
@@ -15,384 +28,528 @@ function App() {
     userType: 'donor'
   });
 
-  // const API_BASE_URL = 'http://localhost:8081/api/v1'; // Using proxy instead
+  // Login state
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: ''
+  });
 
-  // Fetch available medicines
+  // Fetch medicines when component mounts or when user logs in
   useEffect(() => {
-    if (activeTab === 'browse') {
-      fetch(`/api/v1/medicines/available?page=0&size=20`)
-        .then(response => response.json())
-        .then(data => setMedicines(data.content || []))
-        .catch(error => console.error('Error fetching medicines:', error));
+    if (isLoggedIn && user) {
+      fetchMedicines();
     }
-  }, [activeTab]);
+  }, [isLoggedIn, user]);
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    console.log('=== LOGIN FORM SUBMITTED ===');
-    console.log('Login form data:', loginForm);
-    console.log('Email:', loginForm.email);
-    console.log('Password length:', loginForm.password.length);
-    
+  const fetchMedicines = async () => {
     try {
-      console.log('Sending POST request to: /api/v1/auth/login');
-      const response = await fetch(`/api/v1/auth/login`, {
-        method: 'POST',
+      console.log('=== FETCHING MEDICINES ===');
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('No token found, cannot fetch medicines');
+        return;
+      }
+
+      const response = await fetch('/api/v1/medicines/available', {
         headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(loginForm),
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
       });
-      
-      console.log('=== LOGIN RESPONSE RECEIVED ===');
+
+      console.log('=== MEDICINES RESPONSE RECEIVED ===');
       console.log('Response status:', response.status);
       console.log('Response OK?', response.ok);
-      
+
       if (response.ok) {
         const data = await response.json();
-        console.log('Response data:', data);
-        console.log('Token:', data.token ? `${data.token.substring(0, 20)}...` : 'No token');
-        
-        localStorage.setItem('token', data.token);
-        console.log('Token stored in localStorage');
-        
-        setIsLoggedIn(true);
-        setCurrentUser({ email: loginForm.email });
-        console.log('User logged in, redirecting to donate tab');
-        setActiveTab('donate');
+        console.log('Medicines data:', data);
+        setMedicines(Array.isArray(data.content) ? data.content : []);
       } else {
-        console.error('Login failed with status:', response.status);
-        const errorData = await response.text();
-        console.error('Error response body:', errorData);
-        alert('Login failed: ' + errorData);
+        console.error('Failed to fetch medicines:', response.status, response.statusText);
+        // Handle error appropriately
       }
     } catch (error) {
-      console.error('=== LOGIN ERROR ===');
-      console.error('Error object:', error);
-      console.error('Error message:', error.message);
-      alert('Login failed: ' + error.message);
+      console.error('Error fetching medicines:', error);
     }
+  };
+
+  const handleRegisterChange = (e) => {
+    const { name, value } = e.target;
+    setRegisterData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleLoginChange = (e) => {
+    const { name, value } = e.target;
+    setLoginData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
+  const handleDonateChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setDonateFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
   };
 
   const handleRegister = async (e) => {
     e.preventDefault();
-    console.log('=== REGISTRATION FORM SUBMITTED ===');
-    console.log('Register form data:', registerForm);
-    console.log('Email:', registerForm.email);
-    console.log('Full Name:', registerForm.fullName);
-    console.log('Phone:', registerForm.phone);
-    console.log('User Type:', registerForm.userType);
-    console.log('Password length:', registerForm.password.length);
-    
+    console.log('=== REGISTER FORM SUBMITTED ===');
+    console.log('Register form data:', registerData);
+    console.log('Email:', registerData.email);
+    console.log('Password length:', registerData.password.length);
+    console.log('Full Name:', registerData.fullName);
+    console.log('Phone:', registerData.phone);
+    console.log('User Type:', registerData.userType);
+
     try {
       console.log('Sending POST request to: /api/v1/auth/register');
-      const response = await fetch(`/api/v1/auth/register`, {
+      const response = await fetch('/api/v1/auth/register', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(registerForm),
+        body: JSON.stringify(registerData)
       });
-      
-      console.log('=== REGISTRATION RESPONSE RECEIVED ===');
+
+      console.log('=== REGISTER RESPONSE RECEIVED ===');
       console.log('Response status:', response.status);
       console.log('Response OK?', response.ok);
-      
+
       if (response.ok) {
         const data = await response.json();
-        console.log('Registration successful! Response data:', data);
-        console.log('Token received:', data.token ? `${data.token.substring(0, 20)}...` : 'No token');
-        alert('Registration successful! Please log in.');
+        console.log('Registration successful!', data);
+        alert('Registration successful!');
+        
+        // Clear the form data after successful registration
+        setRegisterData({
+          email: '',
+          password: '',
+          fullName: '',
+          phone: '',
+          userType: 'donor'
+        });
+        
+        // Switch to login tab
         setActiveTab('login');
       } else {
-        console.error('Registration failed with status:', response.status);
-        const errorData = await response.text();
-        console.error('Error response body:', errorData);
-        alert('Registration failed: ' + errorData);
+        const errorData = await response.json();
+        console.log('Registration failed with status:', response.status);
+        console.log('Error response body:', errorData);
+        alert(`Registration failed: ${errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('=== REGISTRATION ERROR ===');
-      console.error('Error object:', error);
-      console.error('Error message:', error.message);
+      console.error('Registration error:', error);
       alert('Registration failed: ' + error.message);
     }
   };
 
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    console.log('=== LOGIN FORM SUBMITTED ===');
+    console.log('Login form data:', loginData);
+    console.log('Email:', loginData.email);
+    console.log('Password length:', loginData.password.length);
+
+    try {
+      console.log('Sending POST request to: /api/v1/auth/login');
+      const response = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(loginData)
+      });
+
+      console.log('=== LOGIN RESPONSE RECEIVED ===');
+      console.log('Response status:', response.status);
+      console.log('Response OK?', response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Login successful!', data);
+
+        // Store token in localStorage
+        localStorage.setItem('token', data.token);
+        console.log('Token stored in localStorage');
+
+        // Set user data
+        setUser({
+          id: data.userId,
+          email: loginData.email,
+          userType: data.userType
+        });
+        setIsLoggedIn(true);
+
+        console.log('User logged in, redirecting to donate tab');
+        setActiveTab('donate'); // Redirect to donate tab after login
+      } else {
+        const errorData = await response.json();
+        console.log('Login failed with status:', response.status);
+        console.log('Error response body:', errorData);
+        alert(`Login failed: ${errorData.message || 'Invalid credentials'}`);
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      alert('Login failed: ' + error.message);
+    }
+  };
+
   const handleLogout = () => {
+    console.log('Logging out...');
     localStorage.removeItem('token');
     setIsLoggedIn(false);
-    setCurrentUser(null);
-    setActiveTab('browse');
+    setUser(null);
+    setMedicines([]);
+    setActiveTab('login');
+    console.log('Logged out successfully');
   };
 
   const handleDonateMedicine = async (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const medicineData = {
-      medicineName: formData.get('medicineName'),
-      genericName: formData.get('genericName'),
-      manufacturer: formData.get('manufacturer'),
-      batchNumber: formData.get('batchNumber'),
-      expiryDate: formData.get('expiryDate'),
-      quantity: parseInt(formData.get('quantity')),
-      unit: formData.get('unit') || 'tablets',
-      category: formData.get('category'),
-      storageCondition: formData.get('storageCondition'),
-      prescriptionRequired: formData.get('prescriptionRequired') === 'true',
-      imageUrls: [formData.get('imageUrl')] || []
-    };
+    console.log('=== DONATE MEDICINE FORM SUBMITTED ===');
+    console.log('Donate form data:', donateFormData);
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`/api/v1/medicines`, {
+      if (!token) {
+        console.log('No token found, cannot donate medicine');
+        alert('Please login first');
+        return;
+      }
+
+      console.log('Sending POST request to: /api/v1/medicines');
+      const response = await fetch('/api/v1/medicines', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(medicineData),
+        body: JSON.stringify(donateFormData)
+      });
+
+      console.log('=== DONATE MEDICINE RESPONSE RECEIVED ===');
+      console.log('Response status:', response.status);
+      console.log('Response OK?', response.ok);
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Medicine donated successfully!', data);
+        alert('Medicine donated successfully!');
+        
+        // Clear the form data after successful donation
+        setDonateFormData({
+          medicineName: '',
+          category: '',
+          expiryDate: '',
+          quantity: 1,
+          unit: 'tablets',
+          manufacturer: '',
+          batchNumber: '',
+          genericName: '',
+          storageCondition: '',
+          prescriptionRequired: false
+        });
+        
+        // Refresh medicines list
+        fetchMedicines();
+      } else {
+        const errorData = await response.json();
+        console.log('Donation failed with status:', response.status);
+        console.log('Error response body:', errorData);
+        alert(`Donation failed: ${errorData.message || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Donation error:', error);
+      alert('Donation failed: ' + error.message);
+    }
+  };
+
+  const handleRequestMedicine = async (medicineId) => {
+    console.log('Requesting medicine with ID:', medicineId);
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        console.log('No token found, cannot request medicine');
+        alert('Please login first');
+        return;
+      }
+
+      const response = await fetch(`/api/v1/medicines/${medicineId}/request`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          reason: 'Need this medicine for treatment'
+        })
       });
 
       if (response.ok) {
-        alert('Medicine donated successfully!');
-        e.target.reset();
+        alert('Medicine requested successfully! The donor will be notified.');
+        fetchMedicines(); // Refresh the list
       } else {
-        alert('Failed to donate medicine');
+        const errorData = await response.json();
+        alert(`Request failed: ${errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Donate error:', error);
-      alert('Failed to donate medicine');
+      console.error('Request error:', error);
+      alert('Request failed: ' + error.message);
     }
   };
+
+  const renderRegisterForm = () => (
+    <form onSubmit={handleRegister} className="auth-form">
+      <h2>Register</h2>
+      <input
+        type="email"
+        name="email"
+        placeholder="Email"
+        value={registerData.email}
+        onChange={handleRegisterChange}
+        required
+      />
+      <input
+        type="password"
+        name="password"
+        placeholder="Password"
+        value={registerData.password}
+        onChange={handleRegisterChange}
+        required
+      />
+      <input
+        type="text"
+        name="fullName"
+        placeholder="Full Name"
+        value={registerData.fullName}
+        onChange={handleRegisterChange}
+        required
+      />
+      <input
+        type="tel"
+        name="phone"
+        placeholder="Phone"
+        value={registerData.phone}
+        onChange={handleRegisterChange}
+        required
+      />
+      <select
+        name="userType"
+        value={registerData.userType}
+        onChange={handleRegisterChange}
+        required
+      >
+        <option value="donor">Donor</option>
+        <option value="receiver">Receiver</option>
+        <option value="ngo">NGO</option>
+        <option value="admin">Admin</option>
+      </select>
+      <button type="submit">Register</button>
+    </form>
+  );
+
+  const renderLoginForm = () => (
+    <form onSubmit={handleLogin} className="auth-form">
+      <h2>Login</h2>
+      <input
+        type="email"
+        name="email"
+        placeholder="Email"
+        value={loginData.email}
+        onChange={handleLoginChange}
+        required
+      />
+      <input
+        type="password"
+        name="password"
+        placeholder="Password"
+        value={loginData.password}
+        onChange={handleLoginChange}
+        required
+      />
+      <button type="submit">Login</button>
+    </form>
+  );
+
+  const renderDonateForm = () => (
+    <form onSubmit={handleDonateMedicine} className="donate-form">
+      <h2>Donate Medicine</h2>
+      <input
+        type="text"
+        name="medicineName"
+        placeholder="Medicine Name"
+        value={donateFormData.medicineName}
+        onChange={handleDonateChange}
+        required
+      />
+      <input
+        type="text"
+        name="category"
+        placeholder="Category (e.g., Antibiotic, Painkiller)"
+        value={donateFormData.category}
+        onChange={handleDonateChange}
+        required
+      />
+      <input
+        type="date"
+        name="expiryDate"
+        placeholder="Expiry Date"
+        value={donateFormData.expiryDate}
+        onChange={handleDonateChange}
+        required
+      />
+      <div className="number-input">
+        <input
+          type="number"
+          name="quantity"
+          min="1"
+          placeholder="Quantity"
+          value={donateFormData.quantity}
+          onChange={handleDonateChange}
+          required
+        />
+        <select
+          name="unit"
+          value={donateFormData.unit}
+          onChange={handleDonateChange}
+          required
+        >
+          <option value="tablets">Tablets</option>
+          <option value="capsules">Capsules</option>
+          <option value="syrup">Syrup (ml)</option>
+          <option value="ointment">Ointment (gm)</option>
+          <option value="drops">Drops</option>
+        </select>
+      </div>
+      <input
+        type="text"
+        name="manufacturer"
+        placeholder="Manufacturer"
+        value={donateFormData.manufacturer}
+        onChange={handleDonateChange}
+      />
+      <input
+        type="text"
+        name="batchNumber"
+        placeholder="Batch Number"
+        value={donateFormData.batchNumber}
+        onChange={handleDonateChange}
+      />
+      <input
+        type="text"
+        name="genericName"
+        placeholder="Generic Name"
+        value={donateFormData.genericName}
+        onChange={handleDonateChange}
+      />
+      <input
+        type="text"
+        name="storageCondition"
+        placeholder="Storage Condition"
+        value={donateFormData.storageCondition}
+        onChange={handleDonateChange}
+      />
+      <label>
+        <input
+          type="checkbox"
+          name="prescriptionRequired"
+          checked={donateFormData.prescriptionRequired}
+          onChange={handleDonateChange}
+        />
+        Prescription Required
+      </label>
+      <button type="submit">Donate Medicine</button>
+    </form>
+  );
+
+  const renderMedicinesList = () => (
+    <div className="medicines-list">
+      <h2>Available Medicines</h2>
+      {medicines.length === 0 ? (
+        <p>No medicines available at the moment.</p>
+      ) : (
+        <div className="medicine-grid">
+          {medicines.map((medicine) => (
+            <div key={medicine.medicineId} className="medicine-card">
+              <h3>{medicine.medicineName}</h3>
+              <p><strong>Category:</strong> {medicine.category}</p>
+              <p><strong>Expiry:</strong> {new Date(medicine.expiryDate).toLocaleDateString()}</p>
+              <p><strong>Quantity:</strong> {medicine.quantity} {medicine.unit}</p>
+              <p><strong>Status:</strong> {medicine.status}</p>
+              <p><strong>Donor:</strong> {medicine.donor?.fullName || 'Anonymous'}</p>
+              <button 
+                onClick={() => handleRequestMedicine(medicine.medicineId)}
+                className="request-btn"
+              >
+                Request This Medicine
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="App">
       <header className="App-header">
-        <h1>MediShare</h1>
-        <h2>Connecting Medicine Donors with Those in Need</h2>
+        <h1>MediShare - Medicine Donation Platform</h1>
         
-        <nav>
-          <button onClick={() => setActiveTab('browse')} className={activeTab === 'browse' ? 'active' : ''}>
-            Browse Medicines
-          </button>
-          
+        {isLoggedIn && (
+          <div className="user-info">
+            <span>Welcome, {user?.email} ({user?.userType})</span>
+            <button onClick={handleLogout} className="logout-btn">Logout</button>
+          </div>
+        )}
+        
+        <nav className="tab-nav">
           {!isLoggedIn ? (
             <>
-              <button onClick={() => setActiveTab('login')} className={activeTab === 'login' ? 'active' : ''}>
-                Login
-              </button>
-              <button onClick={() => setActiveTab('register')} className={activeTab === 'register' ? 'active' : ''}>
+              <button 
+                className={activeTab === 'register' ? 'active' : ''}
+                onClick={() => setActiveTab('register')}
+              >
                 Register
+              </button>
+              <button 
+                className={activeTab === 'login' ? 'active' : ''}
+                onClick={() => setActiveTab('login')}
+              >
+                Login
               </button>
             </>
           ) : (
             <>
-              <button onClick={() => setActiveTab('donate')} className={activeTab === 'donate' ? 'active' : ''}>
+              <button 
+                className={activeTab === 'donate' ? 'active' : ''}
+                onClick={() => setActiveTab('donate')}
+              >
                 Donate Medicine
               </button>
-              <button onClick={handleLogout}>
-                Logout ({currentUser?.email})
+              <button 
+                className={activeTab === 'medicines' ? 'active' : ''}
+                onClick={() => setActiveTab('medicines')}
+              >
+                Available Medicines
               </button>
             </>
           )}
         </nav>
       </header>
 
-      <main className="App-main">
-        {/* Browse Medicines Tab */}
-        {activeTab === 'browse' && (
-          <div className="tab-content">
-            <h3>Available Medicines</h3>
-            <div className="medicines-grid">
-              {medicines.length > 0 ? (
-                medicines.map((medicine, index) => (
-                  <div key={index} className="medicine-card">
-                    <h4>{medicine.medicineName}</h4>
-                    <p><strong>Generic:</strong> {medicine.genericName}</p>
-                    <p><strong>Manufacturer:</strong> {medicine.manufacturer}</p>
-                    <p><strong>Expiry:</strong> {medicine.expiryDate}</p>
-                    <p><strong>Quantity:</strong> {medicine.quantity} {medicine.unit}</p>
-                    <p><strong>Category:</strong> {medicine.category}</p>
-                    <p><strong>Status:</strong> {medicine.status}</p>
-                  </div>
-                ))
-              ) : (
-                <p>No medicines available at the moment.</p>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Login Tab */}
-        {activeTab === 'login' && (
-          <div className="tab-content">
-            <h3>Login</h3>
-            <form onSubmit={handleLogin}>
-              <div>
-                <label>Email:</label>
-                <input
-                  type="email"
-                  value={loginForm.email}
-                  onChange={(e) => setLoginForm({...loginForm, email: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <label>Password:</label>
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(e) => setLoginForm({...loginForm, password: e.target.value})}
-                  required
-                />
-              </div>
-              <button type="submit">Login</button>
-            </form>
-          </div>
-        )}
-
-        {/* Register Tab */}
-        {activeTab === 'register' && (
-          <div className="tab-content">
-            <h3>Register</h3>
-            <form onSubmit={handleRegister}>
-              <div>
-                <label>Email:</label>
-                <input
-                  type="email"
-                  value={registerForm.email}
-                  onChange={(e) => setRegisterForm({...registerForm, email: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <label>Password:</label>
-                <input
-                  type="password"
-                  value={registerForm.password}
-                  onChange={(e) => setRegisterForm({...registerForm, password: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <label>Full Name:</label>
-                <input
-                  type="text"
-                  value={registerForm.fullName}
-                  onChange={(e) => setRegisterForm({...registerForm, fullName: e.target.value})}
-                  required
-                />
-              </div>
-              <div>
-                <label>Phone:</label>
-                <input
-                  type="tel"
-                  value={registerForm.phone}
-                  onChange={(e) => setRegisterForm({...registerForm, phone: e.target.value})}
-                />
-              </div>
-              <div>
-                <label>User Type:</label>
-                <select
-                  value={registerForm.userType}
-                  onChange={(e) => setRegisterForm({...registerForm, userType: e.target.value})}
-                >
-                  <option value="donor">Donor</option>
-                  <option value="receiver">Receiver</option>
-                  <option value="ngo">NGO</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-              <button type="submit">Register</button>
-            </form>
-          </div>
-        )}
-
-        {/* Donate Medicine Tab */}
-        {activeTab === 'donate' && isLoggedIn && (
-          <div className="tab-content">
-            <h3>Donate Medicine</h3>
-            <form onSubmit={handleDonateMedicine}>
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Medicine Name *</label>
-                  <input type="text" name="medicineName" required />
-                </div>
-                <div className="form-group">
-                  <label>Generic Name</label>
-                  <input type="text" name="genericName" />
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Manufacturer</label>
-                  <input type="text" name="manufacturer" />
-                </div>
-                <div className="form-group">
-                  <label>Batch Number</label>
-                  <input type="text" name="batchNumber" />
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Expiry Date *</label>
-                  <input type="date" name="expiryDate" required />
-                </div>
-                <div className="form-group">
-                  <label>Quantity *</label>
-                  <input type="number" name="quantity" min="1" required />
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Unit</label>
-                  <select name="unit">
-                    <option value="tablets">Tablets</option>
-                    <option value="ml">ML</option>
-                    <option value="strips">Strips</option>
-                    <option value="capsules">Capsules</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Category</label>
-                  <input type="text" name="category" placeholder="e.g., Antibiotic, Painkiller" />
-                </div>
-              </div>
-              
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Storage Condition</label>
-                  <input type="text" name="storageCondition" placeholder="e.g., Cool, Dry place" />
-                </div>
-                <div className="form-group">
-                  <label>Prescription Required?</label>
-                  <select name="prescriptionRequired">
-                    <option value="true">Yes</option>
-                    <option value="false">No</option>
-                  </select>
-                </div>
-              </div>
-              
-              <div className="form-group">
-                <label>Image URL</label>
-                <input type="url" name="imageUrl" placeholder="https://example.com/image.jpg" />
-              </div>
-              
-              <button type="submit">Donate Medicine</button>
-            </form>
-          </div>
-        )}
-
-        {activeTab === 'donate' && !isLoggedIn && (
-          <div className="tab-content">
-            <h3>Please Login to Donate Medicine</h3>
-            <p>You need to be logged in to donate medicines. Please use the login tab above.</p>
-          </div>
-        )}
+      <main className="main-content">
+        {activeTab === 'register' && !isLoggedIn && renderRegisterForm()}
+        {activeTab === 'login' && !isLoggedIn && renderLoginForm()}
+        {activeTab === 'donate' && isLoggedIn && renderDonateForm()}
+        {activeTab === 'medicines' && isLoggedIn && renderMedicinesList()}
       </main>
     </div>
   );

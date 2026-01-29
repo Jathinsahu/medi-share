@@ -36,6 +36,7 @@ public class SecurityConfig {
                 .requestMatchers("/api/v1/auth/**").permitAll()
                 .requestMatchers("/api/v1/medicines/search", "/api/v1/medicines/available").permitAll() // Allow these to be accessed without auth
                 .requestMatchers("/api/v1/medicines/**").authenticated() // All other medicine endpoints require auth
+                .requestMatchers("/api/v1/messages/**").authenticated() // All message endpoints require auth
                 .requestMatchers("/api/v1/users/**").authenticated() // All user endpoints require auth
                 .anyRequest().authenticated()
             );

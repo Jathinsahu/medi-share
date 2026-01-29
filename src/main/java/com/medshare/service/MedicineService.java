@@ -116,7 +116,52 @@ public class MedicineService {
         DonationRequest donationRequest = new DonationRequest(medicine, user, request.getReason(), request.getUrgency());
         return donationRequestRepository.save(donationRequest);
     }
-
+    
+    public DonationRequest updateRequestStatus(UUID requestId, User user, DonationRequest.RequestStatus newStatus) {
+        DonationRequest request = donationRequestRepository.findById(requestId)
+            .orElseThrow(() -> new ServiceException("Request not found"));
+        
+        // Check if user is authorized to update status
+        // Either the donor (owner of medicine) or the requester can update certain statuses
+        boolean isDonor = request.getMedicine().getDonor().getUserId().equals(user.getUserId());
+        boolean isRequester = request.getRequester().getUserId().equals(user.getUserId());
+        
+        if (!isDonor && !isRequester) {
+            throw new ServiceException("You are not authorized to update this request");
+        }
+        
+        // Update status
+        request.setStatus(newStatus);
+        
+        // Update medicine status based on request status
+        Medicine medicine = request.getMedicine();
+        if (newStatus == DonationRequest.RequestStatus.accepted) {
+            medicine.setStatus(Medicine.Status.reserved);
+        } else if (newStatus == DonationRequest.RequestStatus.completed) {
+            medicine.setStatus(Medicine.Status.donated);
+        } else if (newStatus == DonationRequest.RequestStatus.rejected) {
+            // If request is rejected, make medicine available again
+            medicine.setStatus(Medicine.Status.available);
+        }
+        
+        medicineRepository.save(medicine);
+        return donationRequestRepository.save(request);
+    }
+    
+    public List<DonationRequest> getRequestsForUserAsDonor(UUID donorId) {
+        User donor = userRepository.findById(donorId)
+            .orElseThrow(() -> new ServiceException("Donor not found"));
+        
+        return donationRequestRepository.findByMedicine_DonorOrderByCreatedAtDesc(donor);
+    }
+    
+    public List<DonationRequest> getRequestsForUserAsRequester(UUID requesterId) {
+        User requester = userRepository.findById(requesterId)
+            .orElseThrow(() -> new ServiceException("Requester not found"));
+        
+        return donationRequestRepository.findByRequesterOrderByCreatedAtDesc(requester);
+    }
+    
     public ImpactMetrics calculateImpact() {
         Long totalMedicinesListed = medicineRepository.count();
         Long totalMedicinesDonated = medicineRepository.countDonatedMedicines();

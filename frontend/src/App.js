@@ -6,17 +6,13 @@ function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
   const [medicines, setMedicines] = useState([]);
-  const [donateFormData, setDonateFormData] = useState({
-    medicineName: '',
-    category: '',
-    expiryDate: '',
-    quantity: 1,
-    unit: 'tablets',
-    manufacturer: '',
-    batchNumber: '',
-    genericName: '',
-    storageCondition: '',
-    prescriptionRequired: false
+  const [messages, setMessages] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [selectedMedicine, setSelectedMedicine] = useState(null);
+  const [messageData, setMessageData] = useState({
+    subject: '',
+    content: ''
   });
 
   // Registration state
@@ -34,10 +30,26 @@ function App() {
     password: ''
   });
 
-  // Fetch medicines when component mounts or when user logs in
+  // Donate form state
+  const [donateFormData, setDonateFormData] = useState({
+    medicineName: '',
+    category: '',
+    expiryDate: '',
+    quantity: 1,
+    unit: 'tablets',
+    manufacturer: '',
+    batchNumber: '',
+    genericName: '',
+    storageCondition: '',
+    prescriptionRequired: false
+  });
+
+  // Fetch data when component mounts or when user logs in
   useEffect(() => {
     if (isLoggedIn && user) {
       fetchMedicines();
+      fetchMessages();
+      fetchUnreadCount();
     }
   }, [isLoggedIn, user]);
 
@@ -67,10 +79,51 @@ function App() {
         setMedicines(Array.isArray(data.content) ? data.content : []);
       } else {
         console.error('Failed to fetch medicines:', response.status, response.statusText);
-        // Handle error appropriately
       }
     } catch (error) {
       console.error('Error fetching medicines:', error);
+    }
+  };
+
+  const fetchMessages = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/v1/messages', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setMessages(Array.isArray(data.content) ? data.content : []);
+      }
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+    }
+  };
+
+  const fetchUnreadCount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('/api/v1/messages/unread-count', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUnreadCount(data.unreadCount || 0);
+      }
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
     }
   };
 
@@ -98,15 +151,18 @@ function App() {
     }));
   };
 
+  const handleMessageChange = (e) => {
+    const { name, value } = e.target;
+    setMessageData(prev => ({
+      ...prev,
+      [name]: value
+    }));
+  };
+
   const handleRegister = async (e) => {
     e.preventDefault();
     console.log('=== REGISTER FORM SUBMITTED ===');
     console.log('Register form data:', registerData);
-    console.log('Email:', registerData.email);
-    console.log('Password length:', registerData.password.length);
-    console.log('Full Name:', registerData.fullName);
-    console.log('Phone:', registerData.phone);
-    console.log('User Type:', registerData.userType);
 
     try {
       console.log('Sending POST request to: /api/v1/auth/register');
@@ -154,8 +210,6 @@ function App() {
     e.preventDefault();
     console.log('=== LOGIN FORM SUBMITTED ===');
     console.log('Login form data:', loginData);
-    console.log('Email:', loginData.email);
-    console.log('Password length:', loginData.password.length);
 
     try {
       console.log('Sending POST request to: /api/v1/auth/login');
@@ -188,7 +242,7 @@ function App() {
         setIsLoggedIn(true);
 
         console.log('User logged in, redirecting to donate tab');
-        setActiveTab('donate'); // Redirect to donate tab after login
+        setActiveTab('donate');
       } else {
         const errorData = await response.json();
         console.log('Login failed with status:', response.status);
@@ -207,6 +261,8 @@ function App() {
     setIsLoggedIn(false);
     setUser(null);
     setMedicines([]);
+    setMessages([]);
+    setUnreadCount(0);
     setActiveTab('login');
     console.log('Logged out successfully');
   };
@@ -282,27 +338,64 @@ function App() {
         return;
       }
 
-      const response = await fetch(`/api/v1/medicines/${medicineId}/request`, {
+      // First, get the medicine details to find the donor
+      const medicine = medicines.find(m => m.medicineId === medicineId);
+      if (!medicine || !medicine.donor) {
+        alert('Cannot find donor information');
+        return;
+      }
+
+      // Open message modal to send request message
+      setSelectedMedicine(medicine);
+      setMessageData({
+        subject: `Request for ${medicine.medicineName}`,
+        content: `Hi ${medicine.donor.fullName}, I would like to request ${medicine.medicineName}. Please let me know if it's available and how we can arrange pickup/delivery.`,
+        urgency: 'medium'
+      });
+      setShowMessageModal(true);
+    } catch (error) {
+      console.error('Request error:', error);
+      alert('Request failed: ' + error.message);
+    }
+  };
+
+  const handleSendMessage = async (e) => {
+    e.preventDefault();
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token || !selectedMedicine) return;
+
+      const messagePayload = {
+        subject: messageData.subject,
+        content: messageData.content,
+        recipientId: selectedMedicine.donor.userId,
+        medicineId: selectedMedicine.medicineId
+      };
+
+      const response = await fetch('/api/v1/messages', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          reason: 'Need this medicine for treatment'
-        })
+        body: JSON.stringify(messagePayload)
       });
 
       if (response.ok) {
-        alert('Medicine requested successfully! The donor will be notified.');
-        fetchMedicines(); // Refresh the list
+        alert('Message sent successfully!');
+        setShowMessageModal(false);
+        setMessageData({ subject: '', content: '' });
+        setSelectedMedicine(null);
+        fetchMessages();
+        fetchUnreadCount();
       } else {
         const errorData = await response.json();
-        alert(`Request failed: ${errorData.message || 'Unknown error'}`);
+        alert(`Failed to send message: ${errorData.message || 'Unknown error'}`);
       }
     } catch (error) {
-      console.error('Request error:', error);
-      alert('Request failed: ' + error.message);
+      console.error('Send message error:', error);
+      alert('Failed to send message: ' + error.message);
     }
   };
 
@@ -498,6 +591,81 @@ function App() {
     </div>
   );
 
+  const renderMessagesList = () => (
+    <div className="messages-list">
+      <h2>Messages {unreadCount > 0 && <span className="unread-badge">({unreadCount} unread)</span>}</h2>
+      {messages.length === 0 ? (
+        <p>No messages yet.</p>
+      ) : (
+        <div className="message-grid">
+          {messages.map((message) => (
+            <div key={message.messageId} className={`message-card ${!message.readStatus ? 'unread' : ''}`}>
+              <div className="message-header">
+                <h3>{message.subject}</h3>
+                <span className="message-date">
+                  {new Date(message.createdAt).toLocaleDateString()}
+                </span>
+              </div>
+              <p className="message-content">{message.content}</p>
+              <div className="message-meta">
+                <span>From: {message.senderName}</span>
+                <span>To: {message.recipientName}</span>
+                {message.relatedMedicineName && (
+                  <span>Regarding: {message.relatedMedicineName}</span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderMessageModal = () => (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <h2>Send Message to Donor</h2>
+        <p>Requesting: <strong>{selectedMedicine?.medicineName}</strong></p>
+        <p>Donor: <strong>{selectedMedicine?.donor?.fullName}</strong></p>
+        
+        <form onSubmit={handleSendMessage}>
+          <input
+            type="text"
+            name="subject"
+            placeholder="Subject"
+            value={messageData.subject}
+            onChange={handleMessageChange}
+            required
+          />
+          <textarea
+            name="content"
+            placeholder="Your message..."
+            value={messageData.content}
+            onChange={handleMessageChange}
+            rows="5"
+            required
+          />
+          <label>
+            Urgency Level:
+            <select
+              name="urgency"
+              value={messageData.urgency}
+              onChange={handleMessageChange}
+            >
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <div className="modal-buttons">
+            <button type="submit">Send Message</button>
+            <button type="button" onClick={() => setShowMessageModal(false)}>Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+
   return (
     <div className="App">
       <header className="App-header">
@@ -540,6 +708,12 @@ function App() {
               >
                 Available Medicines
               </button>
+              <button 
+                className={activeTab === 'messages' ? 'active' : ''}
+                onClick={() => setActiveTab('messages')}
+              >
+                Messages {unreadCount > 0 && <span className="unread-indicator">{unreadCount}</span>}
+              </button>
             </>
           )}
         </nav>
@@ -550,7 +724,10 @@ function App() {
         {activeTab === 'login' && !isLoggedIn && renderLoginForm()}
         {activeTab === 'donate' && isLoggedIn && renderDonateForm()}
         {activeTab === 'medicines' && isLoggedIn && renderMedicinesList()}
+        {activeTab === 'messages' && isLoggedIn && renderMessagesList()}
       </main>
+
+      {showMessageModal && renderMessageModal()}
     </div>
   );
 }

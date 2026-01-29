@@ -5,7 +5,7 @@ import com.medshare.dto.CreateMedicineRequest;
 import com.medshare.dto.ImpactMetrics;
 import com.medshare.dto.MedicineDto;
 import com.medshare.dto.RequestMedicineRequest;
-import com.medshare.model.Medicine;
+import com.medshare.model.DonationRequest;
 import com.medshare.model.User;
 import com.medshare.service.MedicineService;
 import com.medshare.service.UserService;
@@ -17,6 +17,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import jakarta.validation.Valid;
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -97,7 +98,55 @@ public class MedicineController {
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
-
+    
+    // UPDATE - Update request status
+    @PutMapping("/requests/{requestId}/status")
+    public ResponseEntity<?> updateRequestStatus(
+            @PathVariable UUID requestId,
+            @RequestBody Map<String, String> statusRequest,
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        try {
+            String statusStr = statusRequest.get("status");
+            DonationRequest.RequestStatus newStatus = DonationRequest.RequestStatus.valueOf(statusStr.toLowerCase());
+            
+            User user = userService.findByIdOrThrow(userDetails.getId());
+            var updatedRequest = medicineService.updateRequestStatus(requestId, user, newStatus);
+            
+            return ResponseEntity.ok("Request status updated successfully");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error updating request status: " + e.getMessage());
+        }
+    }
+    
+    // GET - Get requests for donor
+    @GetMapping("/requests/my-requests")
+    public ResponseEntity<?> getMyRequests(
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        try {
+            User user = userService.findByIdOrThrow(userDetails.getId());
+            var requests = medicineService.getRequestsForUserAsRequester(user.getUserId());
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error fetching requests: " + e.getMessage());
+        }
+    }
+    
+    // GET - Get requests for donor
+    @GetMapping("/requests/my-donations")
+    public ResponseEntity<?> getMyDonationRequests(
+            @AuthenticationPrincipal UserDetailsImpl userDetails
+    ) {
+        try {
+            User user = userService.findByIdOrThrow(userDetails.getId());
+            var requests = medicineService.getRequestsForUserAsDonor(user.getUserId());
+            return ResponseEntity.ok(requests);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Error fetching requests: " + e.getMessage());
+        }
+    }
+    
     // Analytics endpoint
     @GetMapping("/impact")
     public ResponseEntity<ImpactMetrics> getImpactMetrics() {
